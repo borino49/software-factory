@@ -1,6 +1,6 @@
+import os
 import streamlit as st
 from crewai import Agent, Crew, Process, Task
-from langchain_openai import ChatOpenAI
 
 # Configuration de la page Streamlit
 st.set_page_config(
@@ -34,18 +34,19 @@ if st.button("Lancer la Brigade d'Agents", type="primary"):
     elif not besoin_utilisateur:
         st.warning("⚠️ Veuillez décrire l'outil que vous souhaitez concevoir.")
     else:
+        # Configuration de la clé API pour CrewAI via les variables d'environnement
+        os.environ["OPENAI_API_KEY"] = user_api_key
+        os.environ["OPENAI_MODEL_NAME"] = "gpt-4o"
+
         with st.spinner("🔄 Les agents collaborent (Cadrage -> Architecture -> Développement -> QA)..."):
             try:
-                # Initialisation du LLM avec la clé fournie par l'utilisateur
-                llm = ChatOpenAI(model_name="gpt-4o", temperature=0.2, openai_api_key=user_api_key)
-
                 # Définition des Agents de la Software Factory
                 orchestrateur = Agent(
                     role="Chef de Projet & Orchestrateur Technique",
                     goal="Analyser les besoins et coordonner l'équipe.",
                     backstory="Tu traduis les besoins en cahier des charges et supervises les échanges.",
                     verbose=False,
-                    llm=llm
+                    llm="gpt-4o"
                 )
 
                 architecte = Agent(
@@ -53,7 +54,7 @@ if st.button("Lancer la Brigade d'Agents", type="primary"):
                     goal="Concevoir l'architecture globale et le schéma de données.",
                     backstory="Tu définis la structure technique, les flux et le modèle des données.",
                     verbose=False,
-                    llm=llm
+                    llm="gpt-4o"
                 )
 
                 developpeur = Agent(
@@ -61,7 +62,7 @@ if st.button("Lancer la Brigade d'Agents", type="primary"):
                     goal="Rédiger le code complet et fonctionnel.",
                     backstory="Tu produis l'intégralité du code source propre, commenté et sans omission.",
                     verbose=False,
-                    llm=llm
+                    llm="gpt-4o"
                 )
 
                 testeur = Agent(
@@ -69,7 +70,7 @@ if st.button("Lancer la Brigade d'Agents", type="primary"):
                     goal="Auditer le code et valider la sécurité.",
                     backstory="Tu vérifies l'absence de bugs, les failles de sécurité et la robustesse.",
                     verbose=False,
-                    llm=llm
+                    llm="gpt-4o"
                 )
 
                 # Définition des Tâches du Workflow
@@ -111,4 +112,3 @@ if st.button("Lancer la Brigade d'Agents", type="primary"):
 
             except Exception as e:
                 st.error(f"Une erreur est survenue lors de l'exécution : {e}")
-              
