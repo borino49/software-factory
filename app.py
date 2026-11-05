@@ -9,21 +9,48 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🚀 Software Factory Multi-Agent (v2)")
-st.markdown("Concevez, auditez et téléchargez vos applications automatisées grâce à votre brigade d'agents spécialisés.")
+st.title("🚀 Software Factory Multi-Agent (v4 - Multi-Fournisseurs)")
+st.markdown("Concevez, auditez et téléchargez vos applications avec le fournisseur d'IA de votre choix (OpenAI, Anthropic, Google, Mistral).")
 
-# Barre latérale (Sidebar) pour la sécurité (Modèle BYOK)
+# Barre latérale (Sidebar) pour le choix du fournisseur et la sécurité
 st.sidebar.header("🔐 Configuration & Sécurité")
-st.sidebar.markdown(
-    "Entrez votre clé API OpenAI. Elle est utilisée uniquement pour votre session "
-    "et garantit que chacun consomme ses propres ressources en toute sécurité."
-)
-user_api_key = st.sidebar.text_input("Clé API OpenAI (sk-...)", type="password")
 
-# Options avancées dans la sidebar
-st.sidebar.markdown("---")
-st.sidebar.header("⚙️ Options de Génération")
-selected_model = st.sidebar.selectbox("Modèle LLM", ["gpt-4o", "gpt-4o-mini"], index=0)
+# Choix élargi du fournisseur LLM
+llm_provider = st.sidebar.selectbox(
+    "Choisissez le fournisseur",
+    ["OpenAI", "Anthropic", "Google (Gemini)", "Mistral AI"],
+    index=0
+)
+
+# Configuration dynamique selon le fournisseur choisi
+if llm_provider == "OpenAI":
+    user_api_key = st.sidebar.text_input("Clé API OpenAI (sk-...)", type="password")
+    selected_model = st.sidebar.selectbox("Modèle OpenAI", ["gpt-4o", "gpt-4o-mini"], index=0)
+    env_key_name = "OPENAI_API_KEY"
+elif llm_provider == "Anthropic":
+    user_api_key = st.sidebar.text_input("Clé API Anthropic (sk-ant-...)", type="password")
+    selected_model = st.sidebar.selectbox(
+        "Modèle Anthropic", 
+        ["claude-3-5-sonnet-20241022", "claude-3-haiku-20240307"], 
+        index=0
+    )
+    env_key_name = "ANTHROPIC_API_KEY"
+elif llm_provider == "Google (Gemini)":
+    user_api_key = st.sidebar.text_input("Clé API Google Gemini", type="password")
+    selected_model = st.sidebar.selectbox(
+        "Modèle Gemini", 
+        ["gemini/gemini-1.5-pro", "gemini/gemini-1.5-flash"], 
+        index=0
+    )
+    env_key_name = "GEMINI_API_KEY"
+else:  # Mistral AI
+    user_api_key = st.sidebar.text_input("Clé API Mistral", type="password")
+    selected_model = st.sidebar.selectbox(
+        "Modèle Mistral", 
+        ["mistral/mistral-large-latest", "mistral/mistral-small-latest"], 
+        index=0
+    )
+    env_key_name = "MISTRAL_API_KEY"
 
 # Zone de saisie principale
 st.markdown("### 📝 Décrivez votre besoin ou l'outil à créer")
@@ -35,15 +62,19 @@ besoin_utilisateur = st.text_area(
 # Bouton de lancement
 if st.button("Lancer la Brigade d'Agents", type="primary"):
     if not user_api_key:
-        st.error("⚠️ Veuillez entrer votre clé API OpenAI dans la barre latérale pour continuer.")
+        st.error(f"⚠️ Veuillez entrer votre clé API {llm_provider} dans la barre latérale pour continuer.")
     elif not besoin_utilisateur.strip():
         st.warning("⚠️ Veuillez décrire l'outil que vous souhaitez concevoir.")
     else:
-        # Configuration de l'environnement pour CrewAI
-        os.environ["OPENAI_API_KEY"] = user_api_key
+        # Nettoyage complet de toutes les clés pour éviter les interférences
+        for key in ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "MISTRAL_API_KEY"]:
+            os.environ.pop(key, None)
+        
+        # Injection de la clé active et du modèle
+        os.environ[env_key_name] = user_api_key
         os.environ["OPENAI_MODEL_NAME"] = selected_model
 
-        with st.spinner("🔄 Les agents collaborent (Cadrage -> Architecture -> Développement -> QA)..."):
+        with st.spinner(f"🔄 Les agents collaborent via {llm_provider} ({selected_model})..."):
             try:
                 # Définition des Agents
                 orchestrateur = Agent(
@@ -112,24 +143,24 @@ if st.button("Lancer la Brigade d'Agents", type="primary"):
                 resultat_str = str(resultat)
 
                 # Affichage du succès
-                st.success("✅ Application conçue avec succès par votre brigade d'agents !")
+                st.success(f"✅ Application conçue avec succès via {llm_provider} !")
                 st.markdown("### 📋 Rapport & Code de la Brigade :")
                 st.markdown(resultat_str)
 
-                # Amélioration : Persistance via bouton de téléchargement (Correction de la limite identifiée)
+                # Persistance via téléchargement
+                provider_slug = llm_provider.lower().replace(" ", "_").replace("(", "").replace(")", "")
                 st.download_button(
                     label="📥 Télécharger le rapport et le code généré (.md)",
                     data=resultat_str,
-                    file_name="software_factory_output.md",
+                    file_name=f"software_factory_{provider_slug}.md",
                     mime="text/markdown"
                 )
 
             except Exception as e:
-                # Gestion fine des erreurs (Quota, Clé invalide, etc.)
                 error_msg = str(e)
-                if "insufficient_quota" in error_msg or "429" in error_msg:
-                    st.error("❌ Erreur 429 : Votre compte OpenAI n'a plus de crédits disponibles. Veuillez recharger votre solde.")
-                elif "authentication" in error_msg.lower() or "api key" in error_msg.lower():
-                    st.error("❌ Erreur d'authentification : Votre clé API OpenAI semble invalide.")
+                if "429" in error_msg or "quota" in error_msg.lower():
+                    st.error(f"❌ Erreur de quota : Votre compte {llm_provider} est épuisé.")
+                elif "authentication" in error_msg.lower() or "api key" in error_msg.lower() or "auth" in error_msg.lower():
+                    st.error(f"❌ Erreur d'authentification : Votre clé API {llm_provider} semble invalide.")
                 else:
                     st.error(f"Une erreur est survenue lors de l'exécution : {e}")
