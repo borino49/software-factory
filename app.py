@@ -1,16 +1,19 @@
 import os
+import io
+import zipfile
+import re
 import streamlit as st
 from crewai import Agent, Crew, Process, Task
 
 # Configuration de la page Streamlit
 st.set_page_config(
-    page_title="Software Factory - Multi-Agent",
+    page_title="Software Factory - Multi-Agent (Ultimate)",
     page_icon="🤖",
     layout="wide"
 )
 
-st.title("🚀 Software Factory Multi-Agent (v4 - Multi-Fournisseurs)")
-st.markdown("Concevez, auditez et téléchargez vos applications avec le fournisseur d'IA de votre choix (OpenAI, Anthropic, Google, Mistral).")
+st.title("🚀 Software Factory Multi-Agent (v5 - Ultimate & ZIP Export)")
+st.markdown("Passez à la vitesse supérieure : vos agents conçoivent, structurent et empaquettent votre application dans une archive ZIP prête à l'emploi.")
 
 # Barre latérale (Sidebar) pour le choix du fournisseur et la sécurité
 st.sidebar.header("🔐 Configuration & Sécurité")
@@ -74,9 +77,9 @@ if st.button("Lancer la Brigade d'Agents", type="primary"):
         os.environ[env_key_name] = user_api_key
         os.environ["OPENAI_MODEL_NAME"] = selected_model
 
-        with st.spinner(f"🔄 Les agents collaborent via {llm_provider} ({selected_model})..."):
+        with st.spinner(f"🔄 Les agents collaborent et structurent votre code via {llm_provider} ({selected_model})..."):
             try:
-                # Définition des Agents
+                # Définition des Agents avec instructions strictes pour le découpage en fichiers
                 orchestrateur = Agent(
                     role="Chef de Projet & Orchestrateur Technique",
                     goal="Analyser les besoins et coordonner l'équipe.",
@@ -95,8 +98,8 @@ if st.button("Lancer la Brigade d'Agents", type="primary"):
 
                 developpeur = Agent(
                     role="Développeur Fullstack Expert",
-                    goal="Rédiger le code complet et fonctionnel.",
-                    backstory="Tu produis l'intégralité du code source propre, commenté et sans omission.",
+                    goal="Rédiger le code complet, modulaire et structuré en fichiers distincts.",
+                    backstory="Tu produis l'intégralité du code source. Pour chaque fichier, tu dois indiquer son nom exact sous le format `### nom_du_fichier.ext` juste au-dessus du bloc de code.",
                     verbose=False,
                     llm=selected_model
                 )
@@ -121,8 +124,8 @@ if st.button("Lancer la Brigade d'Agents", type="primary"):
                     agent=architecte
                 )
                 t3 = Task(
-                    description="Écrire tout le code source nécessaire pour rendre l'outil 100% opérationnel.",
-                    expected_output="Le code source complet de l'application.",
+                    description="Écrire tout le code source nécessaire. IMPORTANT: Sépare chaque fichier en utilisant un titre de niveau 3 avec le nom du fichier (ex: `### app.py`) suivi du bloc de code markdown.",
+                    expected_output="Le code source complet réparti en fichiers clairs et nommés.",
                     agent=developpeur
                 )
                 t4 = Task(
@@ -143,18 +146,58 @@ if st.button("Lancer la Brigade d'Agents", type="primary"):
                 resultat_str = str(resultat)
 
                 # Affichage du succès
-                st.success(f"✅ Application conçue avec succès via {llm_provider} !")
+                st.success(f"✅ Application conçue et structurée avec succès via {llm_provider} !")
                 st.markdown("### 📋 Rapport & Code de la Brigade :")
                 st.markdown(resultat_str)
 
-                # Persistance via téléchargement
-                provider_slug = llm_provider.lower().replace(" ", "_").replace("(", "").replace(")", "")
-                st.download_button(
-                    label="📥 Télécharger le rapport et le code généré (.md)",
-                    data=resultat_str,
-                    file_name=f"software_factory_{provider_slug}.md",
-                    mime="text/markdown"
-                )
+                # --- MOTEUR D'EXTRACTION DE FICHIERS ET GÉNÉRATION DE ZIP ---
+                zip_buffer = io.BytesIO()
+                file_count = 0
+
+                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                    # 1. On sauvegarde d'office le rapport global complet
+                    zip_file.writestr("rapport_software_factory.md", resultat_str)
+
+                    # 2. Expression régulière pour détecter les fichiers nommés (ex: ### main.py ou ### `app.py`)
+                    pattern = r"###\s+(?:`)?([a-zA-Z0-9_\-\./]+\.[a-zA-Z0-9]+)(?:`)?\s*\n+```[a-zA-Z]*\n(.*?)```"
+                    matches = re.findall(pattern, resultat_str, re.DOTALL)
+
+                    if matches:
+                        for filename, code_content in matches:
+                            zip_file.writestr(filename.strip(), code_content.strip())
+                            file_count += 1
+                    else:
+                        # Fallback de secours si aucun nom n'est détecté : extraction des blocs de code génériques
+                        generic_pattern = r"```[a-zA-Z]*\n(.*?)```"
+                        generic_matches = re.findall(generic_pattern, resultat_str, re.DOTALL)
+                        if generic_matches:
+                            zip_file.writestr("main.py", generic_matches[-1].strip())
+                            file_count += 1
+
+                zip_buffer.seek(0)
+
+                # --- BOUTONS DE TÉLÉCHARGEMENT AVANCÉS ---
+                st.markdown("---")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.download_button(
+                        label="📥 Télécharger le rapport complet (.md)",
+                        data=resultat_str,
+                        file_name=f"software_factory_{llm_provider.lower()}.md",
+                        mime="text/markdown"
+                    )
+                
+                with col2:
+                    if file_count > 0:
+                        st.download_button(
+                            label=f"📦 Télécharger l'archive ZIP du projet ({file_count} fichiers)",
+                            data=zip_buffer,
+                            file_name="software_project_export.zip",
+                            mime="application/zip"
+                        )
+                    else:
+                        st.info("💡 Le rapport est disponible, aucun fichier de code isolé n'a été détecté pour le ZIP.")
 
             except Exception as e:
                 error_msg = str(e)
