@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environnements virtuels
+.venv/
+venv/
+env/
+
+# Variables sensibles et secrets
+.env
+.env.*
+!.env.example
+
+# Tests et couverture
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Outils de développement
+.ruff_cache/
+.mypy_cache/
+
+# Système
+.DS_Store
+Thumbs.db
